@@ -1,0 +1,96 @@
+# Integration test stack: NetBox (with the plugin installed) + Keycloak.
+#
+#   NETBOX_IMAGE_TAG=v4.2 docker compose -f docker/docker-compose.yml up -d --build --wait
+#   pytest integration_tests
+#
+# Supported NETBOX_IMAGE_TAG values: v4.0, v4.1, v4.2, v4.3, v4.4 (default).
+
+name: netbox-keycloak-jwt-auth
+
+services:
+  postgres:
+    image: docker.io/postgres:16-alpine
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: netbox
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -U netbox -d netbox"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  redis:
+    image: docker.io/redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      # Fixed base URL: the token issuer must be identical no matter whether
+      # the token was requested from the host (localhost:8081) or is being
+      # validated inside the compose network (keycloak:8080).
+      KC_HOSTNAME: http://keycloak:8080
+    volumes:
+      - ./keycloak/realm-infra.json:/opt/keycloak/data/import/realm-infra.json:ro
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-8081}:8080"
+    healthcheck:
+      # The Keycloak image has no curl; bash /dev/tcp is enough to detect
+      # that the HTTP listener is up (realm import happens before that).
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+
+  netbox:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        NETBOX_IMAGE_TAG: ${NETBOX_IMAGE_TAG:-v4.4}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      REDIS_HOST: redis
+      REDIS_DATABASE: "0"
+      REDIS_CACHE_HOST: redis
+      REDIS_CACHE_DATABASE: "1"
+      SECRET_KEY: "e2e-only-secret-key-0123456789abcdefghijklmnopqrstuvwxyz"
+      LOGIN_REQUIRED: "true"
+      # Superuser with a fixed API token: used by the test-suite to inspect
+      # auto-created users and to prove that native token auth still works.
+      SKIP_SUPERUSER: "false"
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@example.com
+      SUPERUSER_PASSWORD: admin
+      SUPERUSER_API_TOKEN: "0123456789abcdef0123456789abcdef01234567"
+    volumes:
+      - ./netbox/plugins.py:/etc/netbox/config/plugins.py:ro
+    ports:
+      - "${NETBOX_HTTP_PORT:-8000}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 90
+      # First boot runs migrations for NetBox itself plus the plugin.
+      start_period: 120s

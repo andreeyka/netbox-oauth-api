@@ -31,7 +31,9 @@ class TestBearerHandling:
     def test_basic_scheme_passes_through(self, auth_request, fake_jwks):
         assert auth_request("Basic dXNlcjpwYXNz") is None
 
-    def test_bearer_scheme_is_case_insensitive(self, auth_request, token_factory, fake_jwks):
+    def test_bearer_scheme_is_case_insensitive(
+        self, auth_request, token_factory, fake_jwks
+    ):
         user, _ = auth_request(f"bearer {token_factory()}")
         assert user.username == "jdoe"
 
@@ -54,7 +56,9 @@ class TestClaimValidation:
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
 
-    def test_expiry_within_clock_skew_accepted(self, auth_request, token_factory, fake_jwks):
+    def test_expiry_within_clock_skew_accepted(
+        self, auth_request, token_factory, fake_jwks
+    ):
         token = token_factory({"exp": int(time.time()) - 10})
         user, _ = auth_request(f"Bearer {token}")
         assert user.username == "jdoe"
@@ -69,7 +73,9 @@ class TestClaimValidation:
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
 
-    def test_audience_list_containing_ours_accepted(self, auth_request, token_factory, fake_jwks):
+    def test_audience_list_containing_ours_accepted(
+        self, auth_request, token_factory, fake_jwks
+    ):
         token = token_factory({"aud": ["account", "netbox"]})
         user, _ = auth_request(f"Bearer {token}")
         assert user.username == "jdoe"
@@ -89,7 +95,9 @@ class TestClaimValidation:
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
 
-    def test_forged_signature_rejected(self, auth_request, token_factory, foreign_key, fake_jwks):
+    def test_forged_signature_rejected(
+        self, auth_request, token_factory, foreign_key, fake_jwks
+    ):
         token = token_factory(key=foreign_key[1], kid=KID_MAIN)
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
@@ -146,7 +154,9 @@ class TestKidAndRotation:
         assert user.username == "jdoe"
         assert fake_jwks.fetch_count == 2
 
-    def test_refresh_cooldown_limits_fetches(self, auth_request, token_factory, fake_jwks):
+    def test_refresh_cooldown_limits_fetches(
+        self, auth_request, token_factory, fake_jwks
+    ):
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token_factory(kid='unknown-1')}")
         assert fake_jwks.fetch_count == 2
@@ -156,7 +166,9 @@ class TestKidAndRotation:
             auth_request(f"Bearer {token_factory(kid='unknown-2')}")
         assert fake_jwks.fetch_count == 2
 
-    def test_jwks_cache_reused_between_requests(self, auth_request, token_factory, fake_jwks):
+    def test_jwks_cache_reused_between_requests(
+        self, auth_request, token_factory, fake_jwks
+    ):
         auth_request(f"Bearer {token_factory()}")
         auth_request(f"Bearer {token_factory()}")
         assert fake_jwks.fetch_count == 1
@@ -175,9 +187,11 @@ class TestErrorHygiene:
         self, auth_request, token_factory, fake_jwks, caplog
     ):
         token = token_factory({"exp": int(time.time()) - 3600})
-        with caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"):
-            with pytest.raises(AuthenticationFailed) as excinfo:
-                auth_request(f"Bearer {token}")
+        with (
+            caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"),
+            pytest.raises(AuthenticationFailed) as excinfo,
+        ):
+            auth_request(f"Bearer {token}")
         # The client sees a generic message; details go to the log.
         assert str(excinfo.value.detail) == GENERIC_ERROR
         assert any("expired" in record.message.lower() for record in caplog.records)

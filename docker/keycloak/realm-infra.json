@@ -1,0 +1,77 @@
+{
+  "realm": "infra",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 600,
+  "roles": {
+    "realm": [
+      { "name": "netbox-admin", "description": "Full NetBox superuser" },
+      { "name": "netbox-write", "description": "Read-write NetBox access" },
+      { "name": "netbox-read", "description": "Read-only NetBox access" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "netbox",
+      "name": "NetBox REST API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "netbox-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "netbox",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "credentials": [
+        { "type": "password", "value": "alice-password", "temporary": false }
+      ],
+      "realmRoles": ["netbox-admin"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Reader",
+      "credentials": [
+        { "type": "password", "value": "bob-password", "temporary": false }
+      ],
+      "realmRoles": ["netbox-read"]
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "carol@example.com",
+      "firstName": "Carol",
+      "lastName": "Norole",
+      "credentials": [
+        { "type": "password", "value": "carol-password", "temporary": false }
+      ]
+    }
+  ]
+}

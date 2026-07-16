@@ -42,9 +42,13 @@ no secrets at all (only the realm's public keys are ever fetched).
 
 | Component | Version           |
 |-----------|-------------------|
-| NetBox    | 4.0 – 4.2         |
+| NetBox    | 4.0 – 4.4         |
 | Python    | 3.10+             |
 | Keycloak  | 22+ (OIDC realm)  |
+
+Every NetBox major release in that range is exercised by the docker-compose
+based integration suite on every pull request (see
+[Integration tests](#integration-tests-docker-compose)).
 
 ## Installation
 
@@ -90,11 +94,19 @@ PLUGINS_CONFIG = {
         'USER_CACHE_TTL': 60,
     }
 }
+```
 
+The plugin registers its authentication class in front of DRF's default chain
+automatically at startup (NetBox builds `REST_FRAMEWORK` internally and does
+not read it from `configuration.py`, so a manual override there would be
+ignored). Native `Token` and session authentication remain in the chain. Set
+`REGISTER_AUTHENTICATION = False` to opt out and wire the class up yourself —
+e.g. in a plain Django/DRF project:
+
+```python
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'netbox_keycloak_jwt_auth.authentication.KeycloakJWTAuthentication',
-        'netbox.api.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
 }
@@ -127,6 +139,7 @@ first request.
 | `SUPERUSER_ROLES` | `[]` | Roles granting `is_superuser` (empty = unmanaged) |
 | `STAFF_ROLES` | `[]` | Roles granting `is_staff` (empty = unmanaged) |
 | `USER_CACHE_TTL` | `60` | sub+roles → user cache lifetime, seconds |
+| `REGISTER_AUTHENTICATION` | `True` | Auto-insert the auth class into DRF's default chain |
 
 ## Usage
 
@@ -151,14 +164,43 @@ untouched.
 ## Development
 
 ```bash
-pip install -e .[test]
-pytest
+python -m venv .venv && source .venv/bin/activate
+pip install -e .[dev]
+pre-commit install
+make lint test
 ```
 
-The test suite runs against a minimal Django project (no NetBox instance
-required) and covers negative cases: expired/forged tokens, wrong audience or
-issuer, `alg: none`, symmetric algorithms, missing `kid`, key rotation and
-refresh cooldown.
+The unit suite runs against a minimal Django project (no NetBox instance or
+docker required) and covers negative cases: expired/forged tokens, wrong
+audience or issuer, `alg: none`, symmetric algorithms, missing `kid`, key
+rotation and refresh cooldown.
+
+### Integration tests (docker-compose)
+
+`docker/docker-compose.yml` starts a complete stack — PostgreSQL, Redis, a
+Keycloak dev instance with a pre-imported `infra` realm (client, roles and
+test users) and NetBox with the plugin installed from the working tree. The
+e2e suite in `integration_tests/` obtains real tokens via the password grant
+and exercises the REST API end to end, including group-based object
+permissions and the native-token fallthrough.
+
+```bash
+make integration                       # single version, default v4.4
+make integration NETBOX_IMAGE_TAG=v4.1 # any of v4.0 … v4.4
+make integration-all                   # the full matrix, sequentially
+```
+
+CI runs this suite for every supported NetBox major version on each pull
+request and weekly against the moving `v4.x` image tags. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+### Releases
+
+Releases are tag-driven: bump the version, update `CHANGELOG.md`, push a
+`vX.Y.Z` tag — GitHub Actions validates the tag against the package version,
+builds the package, creates a GitHub Release and publishes to PyPI via
+trusted publishing. The process is described in
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
 ## License
 

@@ -102,9 +102,13 @@ def token_factory(main_key):
         jwt_headers = {"kid": kid} if kid else {}
         jwt_headers.update(headers or {})
         if alg == "none":
-            return jwt.encode(payload, None, algorithm="none", headers=jwt_headers or None)
+            return jwt.encode(
+                payload, None, algorithm="none", headers=jwt_headers or None
+            )
         signing_key = key if key is not None else main_key[1]
-        return jwt.encode(payload, signing_key, algorithm=alg, headers=jwt_headers or None)
+        return jwt.encode(
+            payload, signing_key, algorithm=alg, headers=jwt_headers or None
+        )
 
     return make_token
 

@@ -1,0 +1,51 @@
+name: Integration
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  schedule:
+    # Weekly: catches regressions from new NetBox patch releases, since the
+    # vX.Y image tags are moving.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: NetBox ${{ matrix.netbox }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        netbox: ["v4.0", "v4.1", "v4.2", "v4.3", "v4.4"]
+    env:
+      NETBOX_IMAGE_TAG: ${{ matrix.netbox }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r integration_tests/requirements.txt
+
+      - name: Build and start the stack
+        run: >
+          docker compose -f docker/docker-compose.yml
+          up -d --build --wait --wait-timeout 900
+
+      - name: Run end-to-end tests
+        run: pytest integration_tests
+
+      - name: Dump container logs
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v --remove-orphans

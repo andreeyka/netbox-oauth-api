@@ -199,11 +199,11 @@ def _create_user(username, claims):
             user = user_model(username=username, is_active=True, **field_values)
             user.set_unusable_password()
             user.save()
-    except IntegrityError:
+    except IntegrityError as exc:
         # Another worker created the same user concurrently.
         user = user_model.objects.filter(username=username).first()
         if user is None:
-            raise MappingError(f"failed to create user {username!r}")
+            raise MappingError(f"failed to create user {username!r}") from exc
         return user
     logger.info("created user %s from Keycloak token", username)
     return user
