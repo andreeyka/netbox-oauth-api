@@ -75,6 +75,9 @@ services:
       REDIS_CACHE_HOST: redis
       REDIS_CACHE_DATABASE: "1"
       SECRET_KEY: "e2e-only-secret-key-0123456789abcdefghijklmnopqrstuvwxyz"
+      # NetBox 4.5+ stores API tokens hashed and needs at least one pepper
+      # (min. 50 chars); older images simply ignore this variable.
+      API_TOKEN_PEPPER_1: "e2e-only-api-token-pepper-0123456789abcdefghijklmnopqrstuvwxyz"
       LOGIN_REQUIRED: "true"
       # Superuser for the test-suite: it provisions its own native API token
       # via /api/users/tokens/provision/ (NetBox 4.5+ stores tokens hashed,

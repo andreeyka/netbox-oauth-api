@@ -31,6 +31,11 @@ class TestBearerHandling:
     def test_basic_scheme_passes_through(self, auth_request, fake_jwks):
         assert auth_request("Basic dXNlcjpwYXNz") is None
 
+    def test_native_v2_bearer_token_passes_through(self, auth_request, fake_jwks):
+        # NetBox 4.5+ hashed API tokens use "Bearer nbt_<key>.<secret>" —
+        # they are not JWTs and must reach NetBox's own TokenAuthentication.
+        assert auth_request("Bearer nbt_abcdef123456.secretsecretsecret") is None
+
     def test_bearer_scheme_is_case_insensitive(
         self, auth_request, token_factory, fake_jwks
     ):

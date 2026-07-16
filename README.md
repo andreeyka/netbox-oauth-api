@@ -32,7 +32,8 @@ no secrets at all (only the realm's public keys are ever fetched).
   cache key makes role changes take effect immediately.
 - **Chain-friendly** — any non-`Bearer` Authorization scheme is passed to the
   next authentication class, so native NetBox tokens and sessions keep
-  working unchanged.
+  working unchanged. NetBox 4.5+ hashed API tokens (`Bearer nbt_…`) are
+  recognized and passed through as well.
 - **Audit-friendly** — validated claims are exposed as
   `request.keycloak_claims`; NetBox change logging attributes changes to the
   mapped user. Failures return an opaque 401 while details go to the

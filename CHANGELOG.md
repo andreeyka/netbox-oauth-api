@@ -24,6 +24,8 @@ Initial release (will become 0.1.0).
   `is_staff` field.
 - Automatic registration of the authentication class in front of DRF's
   default chain at startup (opt-out via `REGISTER_AUTHENTICATION`).
+- Native NetBox v2 API tokens (`Bearer nbt_…`, NetBox 4.5+) are detected
+  and passed through to NetBox's own token authentication.
 - Support for NetBox 4.0 – 4.6.
 - Docker-compose integration environment (NetBox + Keycloak with a
   pre-imported test realm) and an end-to-end test-suite.

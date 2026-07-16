@@ -95,7 +95,13 @@ def native(netbox, stack_ready):
     assert response.status_code == 201, (
         f"cannot provision a native token: {response.status_code} {response.text}"
     )
-    return {"Authorization": f"Token {response.json()['key']}"}
+    data = response.json()
+    if data.get("version") == 2:
+        # NetBox 4.5+ hashed token: sent as "Bearer nbt_<key>.<secret>", the
+        # secret is returned exactly once in "token". Using the Bearer scheme
+        # here also proves the plugin passes native tokens down the chain.
+        return {"Authorization": f"Bearer nbt_{data['key']}.{data['token']}"}
+    return {"Authorization": f"Token {data['key']}"}
 
 
 @pytest.fixture(scope="session")

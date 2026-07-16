@@ -15,6 +15,12 @@ logger = logging.getLogger("netbox_keycloak_jwt_auth")
 #: Generic client-facing error; details go to the log only, never the response.
 GENERIC_ERROR = "Invalid or expired token."
 
+#: NetBox 4.5+ issues its own hashed (v2) API tokens with the ``Bearer``
+#: scheme and this prefix. They are not JWTs and must fall through to
+#: NetBox's native TokenAuthentication. A JWT can never collide: its first
+#: segment is base64url-encoded JSON and always starts with ``ey``.
+NATIVE_TOKEN_PREFIX = "nbt_"
+
 
 class KeycloakJWTAuthentication(BaseAuthentication):
     """Authenticate ``Authorization: Bearer <JWT>`` against the Keycloak JWKS.
@@ -42,6 +48,11 @@ class KeycloakJWTAuthentication(BaseAuthentication):
         except UnicodeDecodeError as exc:
             logger.warning("Bearer token contains invalid characters")
             raise AuthenticationFailed(GENERIC_ERROR) from exc
+
+        if token.startswith(NATIVE_TOKEN_PREFIX):
+            # A native NetBox v2 API token (NetBox 4.5+), not a JWT — let
+            # NetBox's own TokenAuthentication handle it.
+            return None
 
         config = get_settings()
         claims = self._validate_token(token, config)
