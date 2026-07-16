@@ -46,7 +46,9 @@ class TestUserCreation:
         assert user.pk == existing.pk
         assert existing.keycloak_identity.sub == SUB
 
-    def test_missing_username_claim_rejected(self, auth_request, token_factory, fake_jwks):
+    def test_missing_username_claim_rejected(
+        self, auth_request, token_factory, fake_jwks
+    ):
         token = token_factory({"preferred_username": None})
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
@@ -130,9 +132,16 @@ class TestProfileSync:
 
     def test_no_write_without_diff(self, fake_jwks):
         user = User.objects.create_user(
-            username="jdoe", email="jdoe@example.com", first_name="John", last_name="Doe"
+            username="jdoe",
+            email="jdoe@example.com",
+            first_name="John",
+            last_name="Doe",
         )
-        claims = {"email": "jdoe@example.com", "given_name": "John", "family_name": "Doe"}
+        claims = {
+            "email": "jdoe@example.com",
+            "given_name": "John",
+            "family_name": "Doe",
+        }
         with mock.patch.object(user, "save") as save:
             mapping._sync_profile(user, claims)
         save.assert_not_called()
@@ -187,7 +196,9 @@ class TestGroupSync:
         user, _ = auth_request(f"Bearer {token}")
         assert set(user.groups.values_list("name", flat=True)) == {"Local Team"}
 
-    def test_group_sync_disabled(self, auth_request, token_factory, fake_jwks, plugin_settings):
+    def test_group_sync_disabled(
+        self, auth_request, token_factory, fake_jwks, plugin_settings
+    ):
         plugin_settings(GROUP_SYNC_ENABLED=False)
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert user.groups.count() == 0
@@ -208,7 +219,9 @@ class TestGroupSync:
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert set(user.groups.values_list("name", flat=True)) == {"NetBox Readers"}
 
-    def test_empty_mapping_is_noop(self, auth_request, token_factory, fake_jwks, plugin_settings):
+    def test_empty_mapping_is_noop(
+        self, auth_request, token_factory, fake_jwks, plugin_settings
+    ):
         plugin_settings(ROLE_GROUP_MAPPING={})
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert user.groups.count() == 0
@@ -230,16 +243,40 @@ class TestFlagSync:
         assert not user.is_superuser
         assert not user.is_staff
 
-    def test_empty_lists_leave_flags_alone(self, auth_request, token_factory, fake_jwks):
-        user = User.objects.create_user(username="jdoe", is_staff=True, is_superuser=True)
+    def test_empty_lists_leave_flags_alone(
+        self, auth_request, token_factory, fake_jwks
+    ):
+        user = User.objects.create_user(
+            username="jdoe", is_staff=True, is_superuser=True
+        )
         KeycloakIdentity.objects.create(user=user, sub=SUB)
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert user.is_staff
         assert user.is_superuser
 
+    def test_missing_flag_field_is_skipped_with_warning(self, caplog):
+        # NetBox 4.5 removed User.is_staff together with the Django admin;
+        # a configured STAFF_ROLES must be ignored, not crash every request.
+        class AdminlessUser:
+            username = "jdoe"
+            is_superuser = False
+
+            def save(self, update_fields=None):
+                self.saved_fields = update_fields
+
+        user = AdminlessUser()
+        config = {"SUPERUSER_ROLES": ["netbox-admin"], "STAFF_ROLES": ["netbox-admin"]}
+        with caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"):
+            mapping.sync_flags(user, ["netbox-admin"], config)
+        assert user.is_superuser
+        assert user.saved_fields == ["is_superuser"]
+        assert any("STAFF_ROLES" in record.message for record in caplog.records)
+
 
 class TestUserCache:
-    def test_cache_hit_skips_mapping(self, auth_request, token_factory, fake_jwks, monkeypatch):
+    def test_cache_hit_skips_mapping(
+        self, auth_request, token_factory, fake_jwks, monkeypatch
+    ):
         user, _ = auth_request(f"Bearer {token_factory()}")
 
         def boom(*args, **kwargs):
@@ -257,7 +294,9 @@ class TestUserCache:
 
         token = token_factory({"realm_access": {"roles": ["netbox-admin"]}})
         user, _ = auth_request(f"Bearer {token}")
-        assert set(user.groups.values_list("name", flat=True)) == {"NetBox Administrators"}
+        assert set(user.groups.values_list("name", flat=True)) == {
+            "NetBox Administrators"
+        }
 
     def test_stale_cached_user_recovers(self, auth_request, token_factory, fake_jwks):
         user, _ = auth_request(f"Bearer {token_factory()}")

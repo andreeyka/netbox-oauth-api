@@ -1,0 +1,18 @@
+# Keep the build context minimal: only what `pip install .` needs.
+.git
+.github
+.venv
+venv
+build
+dist
+*.egg-info
+__pycache__
+**/__pycache__
+.pytest_cache
+.coverage
+htmlcov
+docker
+integration_tests
+tests
+Makefile
+.pre-commit-config.yaml
