@@ -19,7 +19,9 @@ Initial release (will become 0.1.0).
 - User mapping by the immutable `sub` claim (`KeycloakIdentity`), optional
   auto-creation, profile sync, rename following.
 - Role → group sync for managed groups only, optional
-  `is_superuser`/`is_staff` control, sub+roles user cache.
+  `is_superuser`/`is_staff` control, sub+roles user cache. `STAFF_ROLES` is
+  ignored (with a warning) on NetBox ≥ 4.5, where the user model has no
+  `is_staff` field.
 - Automatic registration of the authentication class in front of DRF's
   default chain at startup (opt-out via `REGISTER_AUTHENTICATION`).
 - Support for NetBox 4.0 – 4.6.

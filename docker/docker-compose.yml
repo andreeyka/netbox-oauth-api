@@ -76,13 +76,13 @@ services:
       REDIS_CACHE_DATABASE: "1"
       SECRET_KEY: "e2e-only-secret-key-0123456789abcdefghijklmnopqrstuvwxyz"
       LOGIN_REQUIRED: "true"
-      # Superuser with a fixed API token: used by the test-suite to inspect
-      # auto-created users and to prove that native token auth still works.
+      # Superuser for the test-suite: it provisions its own native API token
+      # via /api/users/tokens/provision/ (NetBox 4.5+ stores tokens hashed,
+      # so a pre-seeded token key would not work there).
       SKIP_SUPERUSER: "false"
       SUPERUSER_NAME: admin
       SUPERUSER_EMAIL: admin@example.com
       SUPERUSER_PASSWORD: admin
-      SUPERUSER_API_TOKEN: "0123456789abcdef0123456789abcdef01234567"
     volumes:
       - ./netbox/plugins.py:/etc/netbox/config/plugins.py:ro
     ports:

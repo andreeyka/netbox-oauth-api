@@ -137,7 +137,7 @@ first request.
 | `AUTO_CREATE_GROUPS` | `True` | Create mapped groups when missing |
 | `ROLE_GROUP_MAPPING` | `{}` | Keycloak role → NetBox group name |
 | `SUPERUSER_ROLES` | `[]` | Roles granting `is_superuser` (empty = unmanaged) |
-| `STAFF_ROLES` | `[]` | Roles granting `is_staff` (empty = unmanaged) |
+| `STAFF_ROLES` | `[]` | Roles granting `is_staff` (empty = unmanaged; ignored with a warning on NetBox ≥ 4.5, which removed the field together with the Django admin) |
 | `USER_CACHE_TTL` | `60` | sub+roles → user cache lifetime, seconds |
 | `REGISTER_AUTHENTICATION` | `True` | Auto-insert the auth class into DRF's default chain |
 

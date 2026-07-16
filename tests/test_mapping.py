@@ -254,6 +254,24 @@ class TestFlagSync:
         assert user.is_staff
         assert user.is_superuser
 
+    def test_missing_flag_field_is_skipped_with_warning(self, caplog):
+        # NetBox 4.5 removed User.is_staff together with the Django admin;
+        # a configured STAFF_ROLES must be ignored, not crash every request.
+        class AdminlessUser:
+            username = "jdoe"
+            is_superuser = False
+
+            def save(self, update_fields=None):
+                self.saved_fields = update_fields
+
+        user = AdminlessUser()
+        config = {"SUPERUSER_ROLES": ["netbox-admin"], "STAFF_ROLES": ["netbox-admin"]}
+        with caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"):
+            mapping.sync_flags(user, ["netbox-admin"], config)
+        assert user.is_superuser
+        assert user.saved_fields == ["is_superuser"]
+        assert any("STAFF_ROLES" in record.message for record in caplog.records)
+
 
 class TestUserCache:
     def test_cache_hit_skips_mapping(

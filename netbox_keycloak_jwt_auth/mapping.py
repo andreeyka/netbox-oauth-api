@@ -134,6 +134,15 @@ def sync_flags(user, roles, config):
         managed_roles = config[setting_name]
         if not managed_roles:
             continue
+        if not hasattr(user, field):
+            # NetBox 4.5 dropped the Django admin and with it User.is_staff;
+            # skip the flag instead of failing every authenticated request.
+            logger.warning(
+                "%s is configured but the user model has no %r field — ignored",
+                setting_name,
+                field,
+            )
+            continue
         desired = bool(role_set.intersection(managed_roles))
         if getattr(user, field) != desired:
             setattr(user, field, desired)

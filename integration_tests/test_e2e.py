@@ -9,14 +9,7 @@ import uuid
 
 import httpx
 import jwt
-from conftest import (
-    INTERNAL_ISSUER,
-    KEYCLOAK_URL,
-    REALM,
-    TOKEN_ENDPOINT,
-    bearer,
-    native,
-)
+from conftest import INTERNAL_ISSUER, KEYCLOAK_URL, REALM, TOKEN_ENDPOINT, bearer
 
 
 class TestKeycloakSanity:
@@ -73,10 +66,12 @@ class TestBearerAuthentication:
         deleted = netbox.delete(f"/dcim/sites/{site_id}/", headers=bearer(alice_token))
         assert deleted.status_code == 204
 
-    def test_user_is_autocreated_with_profile_from_token(self, netbox, alice_token):
+    def test_user_is_autocreated_with_profile_from_token(
+        self, netbox, alice_token, native
+    ):
         netbox.get("/dcim/sites/", headers=bearer(alice_token)).raise_for_status()
         response = netbox.get(
-            "/users/users/", headers=native(), params={"username": "alice"}
+            "/users/users/", headers=native, params={"username": "alice"}
         )
         assert response.status_code == 200
         results = response.json()["results"]
@@ -86,12 +81,14 @@ class TestBearerAuthentication:
         assert alice["first_name"] == "Alice"
         assert alice["last_name"] == "Admin"
 
-    def test_mapped_groups_are_autocreated(self, netbox, alice_token, bob_token):
+    def test_mapped_groups_are_autocreated(
+        self, netbox, alice_token, bob_token, native
+    ):
         netbox.get("/dcim/sites/", headers=bearer(alice_token))
         netbox.get("/dcim/sites/", headers=bearer(bob_token))
         for name in ("NetBox Administrators", "NetBox Readers"):
             response = netbox.get(
-                "/users/groups/", headers=native(), params={"name": name}
+                "/users/groups/", headers=native, params={"name": name}
             )
             assert response.status_code == 200
             assert response.json()["count"] == 1, f"group {name!r} was not created"
@@ -100,19 +97,19 @@ class TestBearerAuthentication:
         response = netbox.get("/dcim/sites/", headers=bearer(bob_token))
         assert response.status_code == 403
 
-    def test_object_permission_on_mapped_group_applies(self, netbox, bob_token):
+    def test_object_permission_on_mapped_group_applies(self, netbox, bob_token, native):
         # bob's first request created him and put him into "NetBox Readers";
         # granting that group a view permission must open read access — this
         # also proves the group membership really landed in the database.
         netbox.get("/dcim/sites/", headers=bearer(bob_token))
         groups = netbox.get(
-            "/users/groups/", headers=native(), params={"name": "NetBox Readers"}
+            "/users/groups/", headers=native, params={"name": "NetBox Readers"}
         ).json()["results"]
         assert len(groups) == 1
 
         permission = netbox.post(
             "/users/permissions/",
-            headers=native(),
+            headers=native,
             json={
                 "name": f"e2e-readers-view-sites-{uuid.uuid4().hex[:8]}",
                 "enabled": True,
@@ -135,15 +132,15 @@ class TestBearerAuthentication:
             )
             assert write.status_code == 403
         finally:
-            netbox.delete(f"/users/permissions/{permission_id}/", headers=native())
+            netbox.delete(f"/users/permissions/{permission_id}/", headers=native)
 
     def test_user_without_roles_is_authenticated_but_forbidden(
-        self, netbox, carol_token
+        self, netbox, carol_token, native
     ):
         response = netbox.get("/dcim/sites/", headers=bearer(carol_token))
         assert response.status_code == 403
         found = netbox.get(
-            "/users/users/", headers=native(), params={"username": "carol"}
+            "/users/users/", headers=native, params={"username": "carol"}
         ).json()
         assert found["count"] == 1
 
@@ -179,9 +176,9 @@ class TestNegative:
         response = netbox.get("/dcim/sites/")
         assert response.status_code in (401, 403)
 
-    def test_native_netbox_token_still_works(self, netbox):
+    def test_native_netbox_token_still_works(self, netbox, native):
         # Regression: the plugin must pass non-Bearer schemes down the chain.
-        response = netbox.get("/dcim/sites/", headers=native())
+        response = netbox.get("/dcim/sites/", headers=native)
         assert response.status_code == 200
 
     def test_ui_session_authentication_still_works(self):

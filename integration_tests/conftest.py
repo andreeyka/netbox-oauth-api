@@ -20,9 +20,8 @@ INTERNAL_ISSUER = os.environ.get(
 )
 REALM = os.environ.get("E2E_REALM", "infra")
 CLIENT_ID = os.environ.get("E2E_CLIENT_ID", "netbox")
-SUPERUSER_TOKEN = os.environ.get(
-    "E2E_SUPERUSER_TOKEN", "0123456789abcdef0123456789abcdef01234567"
-)
+ADMIN_USERNAME = os.environ.get("E2E_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("E2E_ADMIN_PASSWORD", "admin")
 WAIT_TIMEOUT = int(os.environ.get("E2E_WAIT_TIMEOUT", "600"))
 
 TOKEN_ENDPOINT = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token"
@@ -37,11 +36,6 @@ PASSWORDS = {
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
-
-
-def native():
-    """NetBox's own token scheme, using the compose-provisioned superuser."""
-    return {"Authorization": f"Token {SUPERUSER_TOKEN}"}
 
 
 def _wait_until(check, description):
@@ -83,6 +77,25 @@ def stack_ready():
 def netbox():
     with httpx.Client(base_url=f"{NETBOX_URL}/api", timeout=30) as client:
         yield client
+
+
+@pytest.fixture(scope="session")
+def native(netbox, stack_ready):
+    """Authorization headers with a native NetBox token.
+
+    Provisioned through /api/users/tokens/provision/ with the superuser's
+    username/password — works on every NetBox 4.x, including 4.5+ where API
+    tokens are stored hashed and can no longer be pre-seeded by the
+    container entrypoint.
+    """
+    response = netbox.post(
+        "/users/tokens/provision/",
+        json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+    )
+    assert response.status_code == 201, (
+        f"cannot provision a native token: {response.status_code} {response.text}"
+    )
+    return {"Authorization": f"Token {response.json()['key']}"}
 
 
 @pytest.fixture(scope="session")
