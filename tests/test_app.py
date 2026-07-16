@@ -31,15 +31,37 @@ class TestAuthenticationRegistration:
         assert register_authentication_class() is False
         assert django_settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] == []
 
-    def test_existing_chain_is_prepended_not_replaced(self, monkeypatch):
+    def test_already_imported_apiview_is_updated(self, monkeypatch):
+        # NetBox imports rest_framework.views before plugin ready() runs, so
+        # APIView holds a stale copy of the default chain that must be fixed.
+        from rest_framework.views import APIView
+
+        from netbox_keycloak_jwt_auth.authentication import KeycloakJWTAuthentication
+
         monkeypatch.setattr(
             django_settings,
             "REST_FRAMEWORK",
-            {"DEFAULT_AUTHENTICATION_CLASSES": ["myproject.auth.Custom"]},
+            {
+                "DEFAULT_AUTHENTICATION_CLASSES": [
+                    "rest_framework.authentication.SessionAuthentication"
+                ]
+            },
+            raising=False,
+        )
+        monkeypatch.setattr(APIView, "authentication_classes", [])
+        assert register_authentication_class() is True
+        assert KeycloakJWTAuthentication in APIView.authentication_classes
+
+    def test_existing_chain_is_prepended_not_replaced(self, monkeypatch):
+        existing = "rest_framework.authentication.BasicAuthentication"
+        monkeypatch.setattr(
+            django_settings,
+            "REST_FRAMEWORK",
+            {"DEFAULT_AUTHENTICATION_CLASSES": [existing]},
             raising=False,
         )
         assert register_authentication_class() is True
         assert django_settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] == [
             AUTHENTICATION_CLASS,
-            "myproject.auth.Custom",
+            existing,
         ]

@@ -1,5 +1,7 @@
 """NetBox plugin: Keycloak JWT (Bearer) authentication for the REST API."""
 
+import sys
+
 try:
     from netbox.plugins import PluginConfig
 except ImportError:  # pragma: no cover — running outside NetBox (test suite)
@@ -59,6 +61,15 @@ def register_authentication_class():
     from rest_framework.settings import api_settings
 
     api_settings.reload()
+
+    # NetBox imports rest_framework.views while its own apps load — long
+    # before any plugin's ready() runs — so APIView has already captured the
+    # old default chain as a class attribute. Point it at the live setting;
+    # views that set authentication_classes explicitly are unaffected.
+    views = sys.modules.get("rest_framework.views")
+    if views is not None:
+        classes = api_settings.DEFAULT_AUTHENTICATION_CLASSES
+        views.APIView.authentication_classes = classes
     return True
 
 
