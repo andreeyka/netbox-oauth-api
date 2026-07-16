@@ -49,6 +49,14 @@ Or manually: `make compose-up`, `make e2e` (repeatable), `make compose-down`.
 Endpoints and credentials can be overridden with `E2E_*` environment
 variables (see `integration_tests/conftest.py`).
 
+> **Troubleshooting:** if the netbox container exits right after
+> `Applying configuration from /etc/unit/nginx-unit.json` with
+> `socket("[::]:8080") failed (97: Address family not supported)`, your
+> docker host has IPv6 disabled at the kernel level. Mount a copy of
+> `/etc/unit/nginx-unit.json` with the `[::]` listeners removed over the
+> original (a compose override file is enough); GitHub-hosted runners are
+> unaffected.
+
 CI runs the unit matrix on every push/PR and the full NetBox version matrix
 (`v4.0`–`v4.4`, in parallel) on every PR plus a weekly schedule, so new
 NetBox patch releases are caught automatically.
