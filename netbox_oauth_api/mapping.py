@@ -1,4 +1,4 @@
-"""Mapping of validated Keycloak claims onto NetBox users, groups and flags."""
+"""Mapping of validated token claims onto NetBox users, groups and flags."""
 
 import hashlib
 import logging
@@ -7,9 +7,9 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
-from .models import KeycloakIdentity
+from .models import OIDCIdentity
 
-logger = logging.getLogger("netbox_keycloak_jwt_auth")
+logger = logging.getLogger("netbox_oauth_api")
 
 USER_CACHE_KEY = "jwtauth:sub:{sub}:{roles_hash}"
 
@@ -29,8 +29,8 @@ def resolve_user(claims, config):
     """Return the NetBox user for *claims*, creating and syncing as configured.
 
     The result is cached under a key that includes a hash of the roles, so a
-    role change in Keycloak takes effect immediately while repeat requests
-    with an unchanged token skip all database writes.
+    role change at the identity provider takes effect immediately while
+    repeat requests with an unchanged token skip all database writes.
     """
     sub = claims.get("sub")
     if not sub:
@@ -164,7 +164,7 @@ def _user_cache_key(sub, roles):
 def _get_or_create_user(sub, username, claims, config):
     user_model = get_user_model()
 
-    identity = KeycloakIdentity.objects.select_related("user").filter(sub=sub).first()
+    identity = OIDCIdentity.objects.select_related("user").filter(sub=sub).first()
     if identity is not None:
         user = identity.user
         identity.save(update_fields=["last_seen"])
@@ -177,17 +177,17 @@ def _get_or_create_user(sub, username, claims, config):
                     f"user {username!r} does not exist and AUTO_CREATE_USER is disabled"
                 )
             user = _create_user(username, claims)
-        elif KeycloakIdentity.objects.filter(user=user).exists():
+        elif OIDCIdentity.objects.filter(user=user).exists():
             # The username matches a NetBox user already linked to a different
-            # Keycloak account — refuse instead of hijacking it.
+            # identity-provider account — refuse instead of hijacking it.
             raise MappingError(
-                f"user {username!r} is already linked to a different Keycloak sub"
+                f"user {username!r} is already linked to a different OIDC sub"
             )
         try:
-            KeycloakIdentity.objects.get_or_create(sub=sub, defaults={"user": user})
+            OIDCIdentity.objects.get_or_create(sub=sub, defaults={"user": user})
         except IntegrityError as exc:
             raise MappingError(
-                f"cannot link user {username!r} to Keycloak identity: {exc}"
+                f"cannot link user {username!r} to OIDC identity: {exc}"
             ) from exc
 
     if not user.is_active:
@@ -214,12 +214,12 @@ def _create_user(username, claims):
         if user is None:
             raise MappingError(f"failed to create user {username!r}") from exc
         return user
-    logger.info("created user %s from Keycloak token", username)
+    logger.info("created user %s from OIDC token", username)
     return user
 
 
 def _maybe_rename(user, username):
-    """Follow a username change in Keycloak (the user was matched by sub)."""
+    """Follow a username change at the provider (the user was matched by sub)."""
     if user.username == username:
         return
     user_model = get_user_model()
@@ -230,7 +230,11 @@ def _maybe_rename(user, username):
             username,
         )
         return
-    logger.info("renaming user %s to %s (changed in Keycloak)", user.username, username)
+    logger.info(
+        "renaming user %s to %s (changed at the identity provider)",
+        user.username,
+        username,
+    )
     user.username = username
     user.save(update_fields=["username"])
 

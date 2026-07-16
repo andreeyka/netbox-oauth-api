@@ -1,16 +1,19 @@
 """Extra NetBox configuration for the integration stack.
 
 Mounted into /etc/netbox/config/, where the netbox-docker configuration
-loader picks up every *.py file.
+loader picks up every *.py file. The stack's identity provider is a Keycloak
+dev instance (see docker-compose.yml) — any other OIDC provider would be
+configured the same way, only ISSUER and ROLES_CLAIM_PATH differ.
 """
 
-PLUGINS = ["netbox_keycloak_jwt_auth"]
+PLUGINS = ["netbox_oauth_api"]
 
 PLUGINS_CONFIG = {
-    "netbox_keycloak_jwt_auth": {
-        "KEYCLOAK_URL": "http://keycloak:8080",
-        "REALM": "infra",
+    "netbox_oauth_api": {
+        "ISSUER": "http://keycloak:8080/realms/infra",
         "AUDIENCE": "netbox",
+        # Keycloak publishes realm roles in a nested claim.
+        "ROLES_CLAIM_PATH": "realm_access.roles",
         "ROLE_GROUP_MAPPING": {
             "netbox-admin": "NetBox Administrators",
             "netbox-write": "NetBox Writers",

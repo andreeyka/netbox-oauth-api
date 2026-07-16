@@ -6,10 +6,10 @@ import httpx
 import pytest
 from rest_framework.exceptions import AuthenticationFailed
 
-from netbox_keycloak_jwt_auth import jwks as jwks_module
-from netbox_keycloak_jwt_auth.authentication import GENERIC_ERROR
-from netbox_keycloak_jwt_auth.jwks import JWKSError, fetch_jwks
-from netbox_keycloak_jwt_auth.settings import get_settings
+from netbox_oauth_api import jwks as jwks_module
+from netbox_oauth_api.authentication import GENERIC_ERROR
+from netbox_oauth_api.jwks import JWKSError, fetch_jwks
+from netbox_oauth_api.settings import get_settings
 
 from .conftest import KID_MAIN, KID_ROTATED, make_jwk
 
@@ -86,7 +86,7 @@ class TestClaimValidation:
         assert user.username == "jdoe"
 
     def test_wrong_issuer_rejected(self, auth_request, token_factory, fake_jwks):
-        token = token_factory({"iss": "https://evil.test/realms/infra"})
+        token = token_factory({"iss": "https://evil.test"})
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token}")
 
@@ -152,7 +152,7 @@ class TestKidAndRotation:
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert fake_jwks.fetch_count == 1
 
-        # Keycloak rotates: new key appears at the endpoint.
+        # The provider rotates: new key appears at the endpoint.
         fake_jwks.document["keys"].append(make_jwk(rotated_key[0], KID_ROTATED))
         token = token_factory(key=rotated_key[1], kid=KID_ROTATED)
         user, _ = auth_request(f"Bearer {token}")
@@ -193,7 +193,7 @@ class TestErrorHygiene:
     ):
         token = token_factory({"exp": int(time.time()) - 3600})
         with (
-            caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"),
+            caplog.at_level("WARNING", logger="netbox_oauth_api"),
             pytest.raises(AuthenticationFailed) as excinfo,
         ):
             auth_request(f"Bearer {token}")
@@ -205,6 +205,9 @@ class TestErrorHygiene:
 
 
 class TestFetchJWKS:
+    DISCOVERY_URL = "https://idp.test/.well-known/openid-configuration"
+    JWKS_URL = "https://idp.test/oauth/jwks"
+
     def _patch_transport(self, monkeypatch, handler):
         real_client = httpx.Client
 
@@ -213,16 +216,57 @@ class TestFetchJWKS:
 
         monkeypatch.setattr(jwks_module.httpx, "Client", client_factory)
 
-    def test_fetch_success(self, monkeypatch):
+    def _discovery_handler(self, requests_seen=None, jwks_uri=JWKS_URL):
         def handler(request):
-            assert (
-                str(request.url)
-                == "https://keycloak.test/realms/infra/protocol/openid-connect/certs"
-            )
-            return httpx.Response(200, json={"keys": []})
+            url = str(request.url)
+            if requests_seen is not None:
+                requests_seen.append(url)
+            if url == self.DISCOVERY_URL:
+                return httpx.Response(200, json={"jwks_uri": jwks_uri})
+            if url == jwks_uri:
+                return httpx.Response(200, json={"keys": []})
+            return httpx.Response(404)
 
-        self._patch_transport(monkeypatch, handler)
+        return handler
+
+    def test_jwks_url_discovered_via_oidc_discovery(self, monkeypatch):
+        requests_seen = []
+        self._patch_transport(monkeypatch, self._discovery_handler(requests_seen))
         assert fetch_jwks(get_settings()) == {"keys": []}
+        assert requests_seen == [self.DISCOVERY_URL, self.JWKS_URL]
+
+    def test_discovered_jwks_url_is_cached(self, monkeypatch):
+        requests_seen = []
+        self._patch_transport(monkeypatch, self._discovery_handler(requests_seen))
+        fetch_jwks(get_settings())
+        fetch_jwks(get_settings())
+        assert requests_seen.count(self.DISCOVERY_URL) == 1
+        assert requests_seen.count(self.JWKS_URL) == 2
+
+    def test_explicit_jwks_url_skips_discovery(self, monkeypatch, plugin_settings):
+        plugin_settings(JWKS_URL=self.JWKS_URL)
+        requests_seen = []
+        self._patch_transport(monkeypatch, self._discovery_handler(requests_seen))
+        assert fetch_jwks(get_settings()) == {"keys": []}
+        assert requests_seen == [self.JWKS_URL]
+
+    def test_discovery_without_jwks_uri_fails(self, monkeypatch):
+        self._patch_transport(
+            monkeypatch, lambda request: httpx.Response(200, json={"issuer": "x"})
+        )
+        with pytest.raises(JWKSError, match="jwks_uri"):
+            fetch_jwks(get_settings())
+
+    def test_issuer_trailing_slash_makes_no_double_slash(
+        self, monkeypatch, plugin_settings
+    ):
+        # authentik-style issuers end with a slash; the discovery URL must not
+        # contain "//.well-known".
+        plugin_settings(ISSUER="https://idp.test/")
+        requests_seen = []
+        self._patch_transport(monkeypatch, self._discovery_handler(requests_seen))
+        fetch_jwks(get_settings())
+        assert requests_seen[0] == self.DISCOVERY_URL
 
     def test_fetch_http_error(self, monkeypatch):
         self._patch_transport(monkeypatch, lambda request: httpx.Response(503))
@@ -236,7 +280,8 @@ class TestFetchJWKS:
         with pytest.raises(JWKSError):
             fetch_jwks(get_settings())
 
-    def test_fetch_unexpected_document(self, monkeypatch):
+    def test_fetch_unexpected_document(self, monkeypatch, plugin_settings):
+        plugin_settings(JWKS_URL=self.JWKS_URL)
         self._patch_transport(
             monkeypatch, lambda request: httpx.Response(200, json={"nope": True})
         )

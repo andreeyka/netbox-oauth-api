@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="KeycloakIdentity",
+            name="OIDCIdentity",
             fields=[
                 (
                     "id",
@@ -30,14 +30,14 @@ class Migration(migrations.Migration):
                     "user",
                     models.OneToOneField(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="keycloak_identity",
+                        related_name="oidc_identity",
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
             options={
-                "verbose_name": "Keycloak identity",
-                "verbose_name_plural": "Keycloak identities",
+                "verbose_name": "OIDC identity",
+                "verbose_name_plural": "OIDC identities",
             },
         ),
     ]

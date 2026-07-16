@@ -1,11 +1,12 @@
-# Integration test stack: NetBox (with the plugin installed) + Keycloak.
+# Integration test stack: NetBox (with the plugin installed) + Keycloak as
+# the concrete OIDC identity provider.
 #
 #   NETBOX_IMAGE_TAG=v4.2 docker compose -f docker/docker-compose.yml up -d --build --wait
 #   pytest integration_tests
 #
 # Supported NETBOX_IMAGE_TAG values: v4.0 … v4.6 (default v4.6).
 
-name: netbox-keycloak-jwt-auth
+name: netbox-oauth-api
 
 services:
   postgres:

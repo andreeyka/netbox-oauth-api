@@ -2,7 +2,7 @@
 
 from django.conf import settings as django_settings
 
-from netbox_keycloak_jwt_auth import AUTHENTICATION_CLASS, register_authentication_class
+from netbox_oauth_api import AUTHENTICATION_CLASS, register_authentication_class
 
 
 class TestAuthenticationRegistration:
@@ -36,7 +36,7 @@ class TestAuthenticationRegistration:
         # APIView holds a stale copy of the default chain that must be fixed.
         from rest_framework.views import APIView
 
-        from netbox_keycloak_jwt_auth.authentication import KeycloakJWTAuthentication
+        from netbox_oauth_api.authentication import OIDCJWTAuthentication
 
         monkeypatch.setattr(
             django_settings,
@@ -50,7 +50,7 @@ class TestAuthenticationRegistration:
         )
         monkeypatch.setattr(APIView, "authentication_classes", [])
         assert register_authentication_class() is True
-        assert KeycloakJWTAuthentication in APIView.authentication_classes
+        assert OIDCJWTAuthentication in APIView.authentication_classes
 
     def test_existing_chain_is_prepended_not_replaced(self, monkeypatch):
         existing = "rest_framework.authentication.BasicAuthentication"
