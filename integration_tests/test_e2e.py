@@ -183,3 +183,28 @@ class TestNegative:
         # Regression: the plugin must pass non-Bearer schemes down the chain.
         response = netbox.get("/dcim/sites/", headers=native())
         assert response.status_code == 200
+
+    def test_ui_session_authentication_still_works(self):
+        # The NetBox UI talks to its own API with a session cookie
+        # (SessionAuthentication); registering the plugin must not break it.
+        from conftest import NETBOX_URL
+
+        with httpx.Client(
+            base_url=NETBOX_URL, timeout=30, follow_redirects=True
+        ) as browser:
+            browser.get("/login/")
+            response = browser.post(
+                "/login/",
+                data={
+                    "username": "admin",
+                    "password": "admin",
+                    "csrfmiddlewaretoken": browser.cookies["csrftoken"],
+                    "next": "/",
+                },
+                headers={"Referer": f"{NETBOX_URL}/login/"},
+            )
+            assert response.status_code == 200
+            assert "sessionid" in browser.cookies, "form login did not start a session"
+
+            api = browser.get("/api/dcim/sites/")
+            assert api.status_code == 200
