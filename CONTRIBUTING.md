@@ -40,8 +40,8 @@ and users `alice` (admin), `bob` (read), `carol` (no roles); passwords are
 created for test bookkeeping.
 
 ```bash
-make integration                       # one version (default v4.4)
-make integration NETBOX_IMAGE_TAG=v4.1 # any of v4.0 … v4.4
+make integration                       # one version (default v4.6)
+make integration NETBOX_IMAGE_TAG=v4.1 # any of v4.0 … v4.6
 make integration-all                   # the whole matrix, sequentially
 ```
 
@@ -58,7 +58,7 @@ variables (see `integration_tests/conftest.py`).
 > unaffected.
 
 CI runs the unit matrix on every push/PR and the full NetBox version matrix
-(`v4.0`–`v4.4`, in parallel) on every PR plus a weekly schedule, so new
+(`v4.0`–`v4.6`, in parallel) on every PR plus a weekly schedule, so new
 NetBox patch releases are caught automatically.
 
 ## Releasing

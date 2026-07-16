@@ -1,7 +1,7 @@
 # Development shortcuts. See CONTRIBUTING.md for the full workflow.
 
-# NetBox image tag for the integration stack (v4.0 … v4.4).
-NETBOX_IMAGE_TAG ?= v4.4
+# NetBox image tag for the integration stack (v4.0 … v4.6).
+NETBOX_IMAGE_TAG ?= v4.6
 COMPOSE = docker compose -f docker/docker-compose.yml
 
 .PHONY: help lint format test build clean compose-up compose-logs compose-down e2e integration integration-all
@@ -51,7 +51,7 @@ integration: compose-up
 	pytest integration_tests; status=$$?; $(COMPOSE) down -v --remove-orphans; exit $$status
 
 integration-all:
-	@for tag in v4.0 v4.1 v4.2 v4.3 v4.4; do \
+	@for tag in v4.0 v4.1 v4.2 v4.3 v4.4 v4.5 v4.6; do \
 		echo "=== NetBox $$tag ==="; \
 		$(MAKE) integration NETBOX_IMAGE_TAG=$$tag || exit 1; \
 	done

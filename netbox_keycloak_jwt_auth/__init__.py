@@ -83,7 +83,7 @@ class NetBoxKeycloakJWTAuthConfig(PluginConfig):
     author = "andreeyka"
     base_url = "keycloak-jwt-auth"
     min_version = "4.0.0"
-    max_version = "4.4.99"
+    max_version = "4.6.99"
     default_auto_field = "django.db.models.BigAutoField"
 
     # NetBox refuses to start when any of these is absent from PLUGINS_CONFIG.

@@ -42,7 +42,7 @@ no secrets at all (only the realm's public keys are ever fetched).
 
 | Component | Version           |
 |-----------|-------------------|
-| NetBox    | 4.0 – 4.4         |
+| NetBox    | 4.0 – 4.6         |
 | Python    | 3.10+             |
 | Keycloak  | 22+ (OIDC realm)  |
 
@@ -185,8 +185,8 @@ and exercises the REST API end to end, including group-based object
 permissions and the native-token fallthrough.
 
 ```bash
-make integration                       # single version, default v4.4
-make integration NETBOX_IMAGE_TAG=v4.1 # any of v4.0 … v4.4
+make integration                       # single version, default v4.6
+make integration NETBOX_IMAGE_TAG=v4.1 # any of v4.0 … v4.6
 make integration-all                   # the full matrix, sequentially
 ```
 

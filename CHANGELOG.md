@@ -22,9 +22,9 @@ Initial release (will become 0.1.0).
   `is_superuser`/`is_staff` control, sub+roles user cache.
 - Automatic registration of the authentication class in front of DRF's
   default chain at startup (opt-out via `REGISTER_AUTHENTICATION`).
-- Support for NetBox 4.0 – 4.4.
+- Support for NetBox 4.0 – 4.6.
 - Docker-compose integration environment (NetBox + Keycloak with a
   pre-imported test realm) and an end-to-end test-suite.
 - GitHub Actions: lint + unit-test matrix + package build (CI), e2e matrix
-  over NetBox v4.0–v4.4 (Integration), tag-driven GitHub Release + PyPI
+  over NetBox v4.0–v4.6 (Integration), tag-driven GitHub Release + PyPI
   publishing (Release).

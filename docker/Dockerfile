@@ -2,7 +2,7 @@
 # Build context is the repository root (see docker-compose.yml).
 
 ARG NETBOX_IMAGE=docker.io/netboxcommunity/netbox
-ARG NETBOX_IMAGE_TAG=v4.4
+ARG NETBOX_IMAGE_TAG=v4.6
 
 FROM ${NETBOX_IMAGE}:${NETBOX_IMAGE_TAG}
 

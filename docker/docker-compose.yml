@@ -3,7 +3,7 @@
 #   NETBOX_IMAGE_TAG=v4.2 docker compose -f docker/docker-compose.yml up -d --build --wait
 #   pytest integration_tests
 #
-# Supported NETBOX_IMAGE_TAG values: v4.0, v4.1, v4.2, v4.3, v4.4 (default).
+# Supported NETBOX_IMAGE_TAG values: v4.0 … v4.6 (default v4.6).
 
 name: netbox-keycloak-jwt-auth
 
@@ -57,7 +57,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       args:
-        NETBOX_IMAGE_TAG: ${NETBOX_IMAGE_TAG:-v4.4}
+        NETBOX_IMAGE_TAG: ${NETBOX_IMAGE_TAG:-v4.6}
     depends_on:
       postgres:
         condition: service_healthy
