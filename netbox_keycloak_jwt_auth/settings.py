@@ -40,6 +40,8 @@ DEFAULT_SETTINGS = {
     "STAFF_ROLES": [],
     # caching
     "USER_CACHE_TTL": 60,
+    # integration
+    "REGISTER_AUTHENTICATION": True,
 }
 
 
@@ -66,7 +68,8 @@ def validate_settings():
     missing = [name for name in REQUIRED_SETTINGS if not config.get(name)]
     if missing:
         raise ImproperlyConfigured(
-            f"{PLUGIN_NAME}: required settings are missing or empty: {', '.join(missing)}"
+            f"{PLUGIN_NAME}: required settings are missing or empty: "
+            f"{', '.join(missing)}"
         )
 
     algorithms = config.get("ALLOWED_ALGORITHMS")

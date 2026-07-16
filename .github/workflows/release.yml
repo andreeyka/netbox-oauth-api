@@ -1,0 +1,87 @@
+# Release flow: push a tag `vX.Y.Z` (matching the version in pyproject.toml
+# and netbox_keycloak_jwt_auth/__init__.py) and this workflow validates,
+# builds, creates a GitHub Release and publishes to PyPI.
+#
+# PyPI publishing uses OIDC trusted publishing — see CONTRIBUTING.md for the
+# one-time PyPI configuration.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  validate:
+    name: Validate tag and run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check that the tag matches the package version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          project_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          module_version=$(python -c "import re, pathlib; print(re.search(r'__version__ = \"(.+?)\"', pathlib.Path('netbox_keycloak_jwt_auth/__init__.py').read_text()).group(1))")
+          echo "tag=$tag_version pyproject=$project_version module=$module_version"
+          if [ "$tag_version" != "$project_version" ] || [ "$tag_version" != "$module_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the package version — bump pyproject.toml and __init__.py first."
+            exit 1
+          fi
+      - name: Run unit tests
+        run: |
+          pip install -e .[test]
+          pytest
+
+  build:
+    name: Build distributions
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  github-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/netbox-keycloak-jwt-auth
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -134,6 +134,15 @@ def sync_flags(user, roles, config):
         managed_roles = config[setting_name]
         if not managed_roles:
             continue
+        if not hasattr(user, field):
+            # NetBox 4.5 dropped the Django admin and with it User.is_staff;
+            # skip the flag instead of failing every authenticated request.
+            logger.warning(
+                "%s is configured but the user model has no %r field — ignored",
+                setting_name,
+                field,
+            )
+            continue
         desired = bool(role_set.intersection(managed_roles))
         if getattr(user, field) != desired:
             setattr(user, field, desired)
@@ -199,11 +208,11 @@ def _create_user(username, claims):
             user = user_model(username=username, is_active=True, **field_values)
             user.set_unusable_password()
             user.save()
-    except IntegrityError:
+    except IntegrityError as exc:
         # Another worker created the same user concurrently.
         user = user_model.objects.filter(username=username).first()
         if user is None:
-            raise MappingError(f"failed to create user {username!r}")
+            raise MappingError(f"failed to create user {username!r}") from exc
         return user
     logger.info("created user %s from Keycloak token", username)
     return user
