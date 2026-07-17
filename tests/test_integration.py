@@ -11,8 +11,8 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from netbox_keycloak_jwt_auth.authentication import KeycloakJWTAuthentication
-from netbox_keycloak_jwt_auth.settings import get_settings, validate_settings
+from netbox_oauth_api.authentication import OIDCJWTAuthentication
+from netbox_oauth_api.settings import get_settings, validate_settings
 
 pytestmark = pytest.mark.django_db
 
@@ -31,14 +31,14 @@ class DummyTokenAuthentication(BaseAuthentication):
 
 
 class WhoAmIView(APIView):
-    authentication_classes = [KeycloakJWTAuthentication, DummyTokenAuthentication]
+    authentication_classes = [OIDCJWTAuthentication, DummyTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(
             {
                 "username": request.user.username,
-                "sub": getattr(request, "keycloak_claims", {}).get("sub"),
+                "sub": getattr(request, "oidc_claims", {}).get("sub"),
             }
         )
 
@@ -96,9 +96,9 @@ class TestConfigValidation:
         with pytest.raises(ImproperlyConfigured, match="AUDIENCE"):
             validate_settings()
 
-    def test_missing_keycloak_url_fails_startup(self, plugin_settings):
-        plugin_settings(KEYCLOAK_URL=None)
-        with pytest.raises(ImproperlyConfigured, match="KEYCLOAK_URL"):
+    def test_missing_issuer_fails_startup(self, plugin_settings):
+        plugin_settings(ISSUER=None)
+        with pytest.raises(ImproperlyConfigured, match="ISSUER"):
             validate_settings()
 
     def test_alg_none_in_config_fails_startup(self, plugin_settings):
@@ -123,7 +123,7 @@ class TestConfigValidation:
 
     def test_verify_ssl_false_logs_warning(self, plugin_settings, caplog):
         plugin_settings(VERIFY_SSL=False)
-        with caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"):
+        with caplog.at_level("WARNING", logger="netbox_oauth_api"):
             validate_settings()
         assert any("VERIFY_SSL" in record.message for record in caplog.records)
 
@@ -134,11 +134,13 @@ class TestConfigValidation:
         assert config["USER_CACHE_TTL"] == 60
         assert config["AUDIENCE"] == "netbox"
 
-    def test_issuer_trailing_slash_normalized(self, plugin_settings):
-        from netbox_keycloak_jwt_auth.settings import build_issuer, build_jwks_url
+    def test_issuer_is_matched_verbatim(self, plugin_settings):
+        # OIDC requires an exact iss match; a configured trailing slash must
+        # be preserved (some providers do issue tokens with one).
+        from netbox_oauth_api.settings import build_discovery_url, get_issuer
 
-        config = plugin_settings(KEYCLOAK_URL="https://keycloak.test/")
-        assert build_issuer(config) == "https://keycloak.test/realms/infra"
-        assert build_jwks_url(config) == (
-            "https://keycloak.test/realms/infra/protocol/openid-connect/certs"
+        config = plugin_settings(ISSUER="https://idp.test/path/")
+        assert get_issuer(config) == "https://idp.test/path/"
+        assert build_discovery_url(config) == (
+            "https://idp.test/path/.well-known/openid-configuration"
         )

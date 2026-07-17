@@ -1,4 +1,4 @@
-"""NetBox plugin: Keycloak JWT (Bearer) authentication for the REST API."""
+"""NetBox plugin: OAuth 2.0 / OIDC JWT (Bearer) authentication for the REST API."""
 
 import sys
 
@@ -16,9 +16,7 @@ from .settings import DEFAULT_SETTINGS, REQUIRED_SETTINGS
 __version__ = "0.1.0"
 
 #: Dotted path of the DRF authentication class provided by this plugin.
-AUTHENTICATION_CLASS = (
-    "netbox_keycloak_jwt_auth.authentication.KeycloakJWTAuthentication"
-)
+AUTHENTICATION_CLASS = "netbox_oauth_api.authentication.OIDCJWTAuthentication"
 
 
 def register_authentication_class():
@@ -73,15 +71,16 @@ def register_authentication_class():
     return True
 
 
-class NetBoxKeycloakJWTAuthConfig(PluginConfig):
-    name = "netbox_keycloak_jwt_auth"
-    verbose_name = "Keycloak JWT Authentication"
+class NetBoxOAuthAPIConfig(PluginConfig):
+    name = "netbox_oauth_api"
+    verbose_name = "OAuth/OIDC JWT Authentication"
     description = (
-        "Authenticate NetBox REST API requests with Keycloak-issued JWT access tokens"
+        "Authenticate NetBox REST API requests with JWT access tokens "
+        "issued by an OAuth 2.0 / OIDC provider"
     )
     version = __version__
     author = "andreeyka"
-    base_url = "keycloak-jwt-auth"
+    base_url = "oauth-api"
     min_version = "4.0.0"
     max_version = "4.6.99"
     default_auto_field = "django.db.models.BigAutoField"
@@ -102,4 +101,4 @@ class NetBoxKeycloakJWTAuthConfig(PluginConfig):
         register_authentication_class()
 
 
-config = NetBoxKeycloakJWTAuthConfig
+config = NetBoxOAuthAPIConfig

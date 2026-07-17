@@ -7,7 +7,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "rest_framework",
-    "netbox_keycloak_jwt_auth.NetBoxKeycloakJWTAuthConfig",
+    "netbox_oauth_api.NetBoxOAuthAPIConfig",
 ]
 
 DATABASES = {
@@ -28,9 +28,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ROOT_URLCONF = "tests.urls"
 
 PLUGINS_CONFIG = {
-    "netbox_keycloak_jwt_auth": {
-        "KEYCLOAK_URL": "https://keycloak.test",
-        "REALM": "infra",
+    "netbox_oauth_api": {
+        "ISSUER": "https://idp.test",
         "AUDIENCE": "netbox",
         "ROLE_GROUP_MAPPING": {
             "netbox-admin": "NetBox Administrators",

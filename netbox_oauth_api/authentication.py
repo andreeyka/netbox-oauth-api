@@ -1,4 +1,4 @@
-"""DRF authentication backend validating Keycloak-issued JWT access tokens."""
+"""DRF authentication backend validating OIDC-provider-issued JWT access tokens."""
 
 import logging
 
@@ -8,9 +8,9 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from .jwks import JWKSError, get_signing_key
 from .mapping import MappingError, resolve_user
-from .settings import FORBIDDEN_ALGORITHMS, build_issuer, get_settings
+from .settings import FORBIDDEN_ALGORITHMS, get_issuer, get_settings
 
-logger = logging.getLogger("netbox_keycloak_jwt_auth")
+logger = logging.getLogger("netbox_oauth_api")
 
 #: Generic client-facing error; details go to the log only, never the response.
 GENERIC_ERROR = "Invalid or expired token."
@@ -22,8 +22,8 @@ GENERIC_ERROR = "Invalid or expired token."
 NATIVE_TOKEN_PREFIX = "nbt_"
 
 
-class KeycloakJWTAuthentication(BaseAuthentication):
-    """Authenticate ``Authorization: Bearer <JWT>`` against the Keycloak JWKS.
+class OIDCJWTAuthentication(BaseAuthentication):
+    """Authenticate ``Authorization: Bearer <JWT>`` against the provider's JWKS.
 
     Any other Authorization scheme (e.g. NetBox's native ``Token``) is passed
     through to the next authentication class in the chain by returning None.
@@ -69,10 +69,10 @@ class KeycloakJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed(GENERIC_ERROR) from exc
 
         # Expose the validated claims for change logging and middleware.
-        request.keycloak_claims = claims
+        request.oidc_claims = claims
         http_request = getattr(request, "_request", None)
         if http_request is not None:
-            http_request.keycloak_claims = claims
+            http_request.oidc_claims = claims
 
         return (user, None)
 
@@ -118,7 +118,7 @@ class KeycloakJWTAuthentication(BaseAuthentication):
                 key=key,
                 algorithms=algorithms,
                 audience=config["AUDIENCE"],
-                issuer=build_issuer(config),
+                issuer=get_issuer(config),
                 leeway=config["CLOCK_SKEW_SECONDS"],
                 options={"require": ["exp", "iat", "sub"]},
             )

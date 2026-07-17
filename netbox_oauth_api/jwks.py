@@ -1,4 +1,4 @@
-"""Fetching, caching and rotation of the Keycloak JWKS (public signing keys)."""
+"""Fetching, caching and rotation of the provider's JWKS (public signing keys)."""
 
 import logging
 
@@ -6,21 +6,20 @@ import httpx
 import jwt
 from django.core.cache import cache
 
-from .settings import build_jwks_url
+from .settings import build_discovery_url
 
-logger = logging.getLogger("netbox_keycloak_jwt_auth")
+logger = logging.getLogger("netbox_oauth_api")
 
 JWKS_CACHE_KEY = "jwtauth:jwks"
 JWKS_COOLDOWN_KEY = "jwtauth:jwks:refresh-cooldown"
+JWKS_URL_CACHE_KEY = "jwtauth:jwks-url"
 
 
 class JWKSError(Exception):
-    """The JWKS endpoint could not be fetched or returned an invalid document."""
+    """The JWKS or discovery endpoint could not be fetched or returned garbage."""
 
 
-def fetch_jwks(config):
-    """Download the JWKS document from Keycloak."""
-    url = build_jwks_url(config)
+def _fetch_json(url, config):
     try:
         with httpx.Client(
             verify=config["VERIFY_SSL"], timeout=config["HTTP_TIMEOUT"]
@@ -29,10 +28,40 @@ def fetch_jwks(config):
             response.raise_for_status()
             document = response.json()
     except httpx.HTTPError as exc:
-        raise JWKSError(f"failed to fetch JWKS from {url}: {exc}") from exc
+        raise JWKSError(f"failed to fetch {url}: {exc}") from exc
     except ValueError as exc:
-        raise JWKSError(f"JWKS endpoint {url} returned invalid JSON") from exc
-    if not isinstance(document, dict) or not isinstance(document.get("keys"), list):
+        raise JWKSError(f"{url} returned invalid JSON") from exc
+    if not isinstance(document, dict):
+        raise JWKSError(f"{url} returned an unexpected document")
+    return document
+
+
+def get_jwks_url(config):
+    """Return the JWKS endpoint URL for the configured provider.
+
+    An explicitly configured JWKS_URL wins; otherwise the URL is read from
+    the provider's OIDC discovery document (``jwks_uri``) and cached for
+    JWKS_CACHE_TTL seconds.
+    """
+    if config["JWKS_URL"]:
+        return config["JWKS_URL"]
+    cached = cache.get(JWKS_URL_CACHE_KEY)
+    if cached is not None:
+        return cached
+    discovery_url = build_discovery_url(config)
+    document = _fetch_json(discovery_url, config)
+    jwks_url = document.get("jwks_uri")
+    if not isinstance(jwks_url, str) or not jwks_url:
+        raise JWKSError(f"discovery document at {discovery_url} has no jwks_uri")
+    cache.set(JWKS_URL_CACHE_KEY, jwks_url, config["JWKS_CACHE_TTL"])
+    return jwks_url
+
+
+def fetch_jwks(config):
+    """Download the JWKS document from the provider."""
+    url = get_jwks_url(config)
+    document = _fetch_json(url, config)
+    if not isinstance(document.get("keys"), list):
         raise JWKSError(f"JWKS endpoint {url} returned an unexpected document")
     return document
 
@@ -58,10 +87,10 @@ def _find_key(document, kid):
 def get_signing_key(kid, config):
     """Return the public key for *kid*, or None when it is unknown.
 
-    An unknown ``kid`` usually means the realm keys were rotated, so the JWKS
-    is force-refreshed once — but at most once per JWKS_REFRESH_COOLDOWN
+    An unknown ``kid`` usually means the provider's keys were rotated, so the
+    JWKS is force-refreshed once — but at most once per JWKS_REFRESH_COOLDOWN
     seconds (``cache.add`` is atomic), so a flood of forged tokens cannot
-    hammer the Keycloak endpoint.
+    hammer the provider's endpoint.
     """
     document = get_jwks(config)
     jwk_data = _find_key(document, kid)

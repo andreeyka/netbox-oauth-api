@@ -1,15 +1,15 @@
-"""Default settings and startup validation for netbox-keycloak-jwt-auth."""
+"""Default settings and startup validation for netbox-oauth-api."""
 
 import logging
 
 from django.core.exceptions import ImproperlyConfigured
 
-logger = logging.getLogger("netbox_keycloak_jwt_auth")
+logger = logging.getLogger("netbox_oauth_api")
 
-PLUGIN_NAME = "netbox_keycloak_jwt_auth"
+PLUGIN_NAME = "netbox_oauth_api"
 
 #: Settings that must be provided in PLUGINS_CONFIG — there are no safe defaults.
-REQUIRED_SETTINGS = ("KEYCLOAK_URL", "REALM", "AUDIENCE")
+REQUIRED_SETTINGS = ("ISSUER", "AUDIENCE")
 
 #: Algorithms that must never be used to verify tokens: ``none`` disables
 #: signature verification entirely, and symmetric (HMAC) algorithms would let
@@ -18,10 +18,10 @@ FORBIDDEN_ALGORITHMS = frozenset({"none", "hs256", "hs384", "hs512"})
 
 DEFAULT_SETTINGS = {
     # required — validated in validate_settings()
-    "KEYCLOAK_URL": "",
-    "REALM": "",
+    "ISSUER": "",
     "AUDIENCE": "",
     # token validation
+    "JWKS_URL": "",  # empty → resolved through OIDC discovery
     "ALLOWED_ALGORITHMS": ["RS256"],
     "CLOCK_SKEW_SECONDS": 30,
     "VERIFY_SSL": True,
@@ -33,7 +33,7 @@ DEFAULT_SETTINGS = {
     "AUTO_CREATE_USER": True,
     # permission sync
     "GROUP_SYNC_ENABLED": True,
-    "ROLES_CLAIM_PATH": "realm_access.roles",
+    "ROLES_CLAIM_PATH": "roles",
     "AUTO_CREATE_GROUPS": True,
     "ROLE_GROUP_MAPPING": {},
     "SUPERUSER_ROLES": [],
@@ -89,17 +89,22 @@ def validate_settings():
 
     if config.get("VERIFY_SSL") is False:
         logger.warning(
-            "%s: VERIFY_SSL is disabled — the TLS certificate of the Keycloak server "
-            "will NOT be verified. Never use this in production.",
+            "%s: VERIFY_SSL is disabled — the TLS certificate of the identity "
+            "provider will NOT be verified. Never use this in production.",
             PLUGIN_NAME,
         )
 
 
-def build_issuer(config):
-    """Expected ``iss`` claim value for the configured realm."""
-    return f"{config['KEYCLOAK_URL'].rstrip('/')}/realms/{config['REALM']}"
+def get_issuer(config):
+    """Expected ``iss`` claim value — the configured ISSUER, verbatim.
+
+    OIDC requires an exact string match on ``iss``, and some providers
+    (e.g. authentik) issue tokens with a trailing slash, so the configured
+    value is never normalized.
+    """
+    return config["ISSUER"]
 
 
-def build_jwks_url(config):
-    """JWKS endpoint URL for the configured realm."""
-    return f"{build_issuer(config)}/protocol/openid-connect/certs"
+def build_discovery_url(config):
+    """OIDC discovery document URL for the configured issuer."""
+    return f"{config['ISSUER'].rstrip('/')}/.well-known/openid-configuration"
