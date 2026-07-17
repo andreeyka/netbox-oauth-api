@@ -7,10 +7,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.exceptions import AuthenticationFailed
 
-from netbox_keycloak_jwt_auth import mapping
-from netbox_keycloak_jwt_auth.mapping import MappingError, extract_roles, resolve_user
-from netbox_keycloak_jwt_auth.models import KeycloakIdentity
-from netbox_keycloak_jwt_auth.settings import get_settings
+from netbox_oauth_api import mapping
+from netbox_oauth_api.mapping import MappingError, extract_roles, resolve_user
+from netbox_oauth_api.models import OIDCIdentity
+from netbox_oauth_api.settings import get_settings
 
 pytestmark = pytest.mark.django_db
 
@@ -27,7 +27,7 @@ class TestUserCreation:
         assert user.last_name == "Doe"
         assert user.is_active
         assert not user.has_usable_password()
-        assert user.keycloak_identity.sub == SUB
+        assert user.oidc_identity.sub == SUB
 
     def test_auto_create_disabled_rejects_unknown_user(
         self, auth_request, token_factory, fake_jwks, plugin_settings
@@ -44,7 +44,7 @@ class TestUserCreation:
         existing = User.objects.create_user(username="jdoe")
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert user.pk == existing.pk
-        assert existing.keycloak_identity.sub == SUB
+        assert existing.oidc_identity.sub == SUB
 
     def test_missing_username_claim_rejected(
         self, auth_request, token_factory, fake_jwks
@@ -62,7 +62,7 @@ class TestUserCreation:
 
     def test_inactive_user_rejected(self, auth_request, token_factory, fake_jwks):
         user = User.objects.create_user(username="jdoe", is_active=False)
-        KeycloakIdentity.objects.create(user=user, sub=SUB)
+        OIDCIdentity.objects.create(user=user, sub=SUB)
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token_factory()}")
 
@@ -70,13 +70,13 @@ class TestUserCreation:
         self, auth_request, token_factory, fake_jwks
     ):
         user = User.objects.create_user(username="jdoe")
-        KeycloakIdentity.objects.create(user=user, sub="another-sub")
+        OIDCIdentity.objects.create(user=user, sub="another-sub")
         with pytest.raises(AuthenticationFailed):
             auth_request(f"Bearer {token_factory()}")
 
 
 class TestIdentityAndRename:
-    def test_rename_in_keycloak_reuses_user_by_sub(
+    def test_rename_at_idp_reuses_user_by_sub(
         self, auth_request, token_factory, fake_jwks
     ):
         from django.core.cache import cache
@@ -106,12 +106,10 @@ class TestIdentityAndRename:
 
     def test_last_seen_updated(self, auth_request, token_factory, fake_jwks):
         auth_request(f"Bearer {token_factory()}")
-        first = KeycloakIdentity.objects.get(sub=SUB).last_seen
+        first = OIDCIdentity.objects.get(sub=SUB).last_seen
         # The user cache is keyed by sub+roles; a role change forces the full path.
-        auth_request(
-            f"Bearer {token_factory({'realm_access': {'roles': ['netbox-write']}})}"
-        )
-        assert KeycloakIdentity.objects.get(sub=SUB).last_seen >= first
+        auth_request(f"Bearer {token_factory({'roles': ['netbox-write']})}")
+        assert OIDCIdentity.objects.get(sub=SUB).last_seen >= first
 
 
 class TestProfileSync:
@@ -122,7 +120,7 @@ class TestProfileSync:
                 "email": "new@example.com",
                 "given_name": "Johnny",
                 # bust the user cache so the full mapping path runs
-                "realm_access": {"roles": ["netbox-write"]},
+                "roles": ["netbox-write"],
             }
         )
         user, _ = auth_request(f"Bearer {token}")
@@ -156,31 +154,31 @@ class TestProfileSync:
 
 class TestRolesExtraction:
     def test_default_path(self):
-        claims = {"realm_access": {"roles": ["a", "b"]}}
+        claims = {"roles": ["a", "b"]}
         assert extract_roles(claims, get_settings()) == ["a", "b"]
 
     def test_nested_path(self, plugin_settings):
-        config = plugin_settings(ROLES_CLAIM_PATH="resource_access.netbox.roles")
-        claims = {"resource_access": {"netbox": {"roles": ["x"]}}}
+        # e.g. Keycloak realm roles live at realm_access.roles
+        config = plugin_settings(ROLES_CLAIM_PATH="realm_access.roles")
+        claims = {"realm_access": {"roles": ["x"]}}
         assert extract_roles(claims, config) == ["x"]
 
     def test_missing_path_returns_empty(self):
         assert extract_roles({}, get_settings()) == []
 
     def test_non_list_returns_empty(self):
-        claims = {"realm_access": {"roles": "not-a-list"}}
+        claims = {"roles": "not-a-list"}
         assert extract_roles(claims, get_settings()) == []
 
-    def test_non_dict_intermediate_returns_empty(self):
+    def test_non_dict_intermediate_returns_empty(self, plugin_settings):
+        config = plugin_settings(ROLES_CLAIM_PATH="realm_access.roles")
         claims = {"realm_access": "oops"}
-        assert extract_roles(claims, get_settings()) == []
+        assert extract_roles(claims, config) == []
 
 
 class TestGroupSync:
     def test_groups_created_and_assigned(self, auth_request, token_factory, fake_jwks):
-        token = token_factory(
-            {"realm_access": {"roles": ["netbox-read", "netbox-admin", "unmapped"]}}
-        )
+        token = token_factory({"roles": ["netbox-read", "netbox-admin", "unmapped"]})
         user, _ = auth_request(f"Bearer {token}")
         names = set(user.groups.values_list("name", flat=True))
         assert names == {"NetBox Readers", "NetBox Administrators"}
@@ -192,7 +190,7 @@ class TestGroupSync:
         user, _ = auth_request(f"Bearer {token_factory()}")
         user.groups.add(local)
 
-        token = token_factory({"realm_access": {"roles": []}})
+        token = token_factory({"roles": []})
         user, _ = auth_request(f"Bearer {token}")
         assert set(user.groups.values_list("name", flat=True)) == {"Local Team"}
 
@@ -232,13 +230,13 @@ class TestFlagSync:
         self, auth_request, token_factory, fake_jwks, plugin_settings
     ):
         plugin_settings(SUPERUSER_ROLES=["netbox-admin"], STAFF_ROLES=["netbox-admin"])
-        token = token_factory({"realm_access": {"roles": ["netbox-admin"]}})
+        token = token_factory({"roles": ["netbox-admin"]})
         user, _ = auth_request(f"Bearer {token}")
         assert user.is_superuser
         assert user.is_staff
 
-        # Role removed in Keycloak → flags are dropped on the next token.
-        token = token_factory({"realm_access": {"roles": ["netbox-read"]}})
+        # Role removed at the provider → flags are dropped on the next token.
+        token = token_factory({"roles": ["netbox-read"]})
         user, _ = auth_request(f"Bearer {token}")
         assert not user.is_superuser
         assert not user.is_staff
@@ -249,7 +247,7 @@ class TestFlagSync:
         user = User.objects.create_user(
             username="jdoe", is_staff=True, is_superuser=True
         )
-        KeycloakIdentity.objects.create(user=user, sub=SUB)
+        OIDCIdentity.objects.create(user=user, sub=SUB)
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert user.is_staff
         assert user.is_superuser
@@ -266,7 +264,7 @@ class TestFlagSync:
 
         user = AdminlessUser()
         config = {"SUPERUSER_ROLES": ["netbox-admin"], "STAFF_ROLES": ["netbox-admin"]}
-        with caplog.at_level("WARNING", logger="netbox_keycloak_jwt_auth"):
+        with caplog.at_level("WARNING", logger="netbox_oauth_api"):
             mapping.sync_flags(user, ["netbox-admin"], config)
         assert user.is_superuser
         assert user.saved_fields == ["is_superuser"]
@@ -292,7 +290,7 @@ class TestUserCache:
         user, _ = auth_request(f"Bearer {token_factory()}")
         assert set(user.groups.values_list("name", flat=True)) == {"NetBox Readers"}
 
-        token = token_factory({"realm_access": {"roles": ["netbox-admin"]}})
+        token = token_factory({"roles": ["netbox-admin"]})
         user, _ = auth_request(f"Bearer {token}")
         assert set(user.groups.values_list("name", flat=True)) == {
             "NetBox Administrators"

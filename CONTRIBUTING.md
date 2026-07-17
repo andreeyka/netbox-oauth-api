@@ -24,13 +24,14 @@ JWKS endpoint — they cover token validation, user/group mapping and
 configuration handling and are the fast, default feedback loop.
 
 **Integration tests** (`integration_tests/`) run against a real NetBox with
-the plugin installed and a real Keycloak issuing tokens. The stack lives in
+the plugin installed and a real OIDC identity provider issuing tokens
+(Keycloak is used as the concrete provider). The stack lives in
 `docker/docker-compose.yml`:
 
 | Service  | Image                                  | Host port |
 |----------|----------------------------------------|-----------|
 | NetBox   | `netboxcommunity/netbox:$NETBOX_IMAGE_TAG` + plugin | 8000 |
-| Keycloak | `quay.io/keycloak/keycloak` (dev mode, realm `infra` pre-imported) | 8081 |
+| Keycloak (test IdP) | `quay.io/keycloak/keycloak` (dev mode, realm `infra` pre-imported) | 8081 |
 | PostgreSQL / Redis | `postgres:16-alpine` / `redis:7-alpine` | — |
 
 The `infra` realm ships a public client `netbox` (direct access grants +
@@ -66,7 +67,7 @@ NetBox patch releases are caught automatically.
 Releases are tag-driven (`.github/workflows/release.yml`):
 
 1. Update the version in **both** `pyproject.toml` and
-   `netbox_keycloak_jwt_auth/__init__.py` (`__version__`).
+   `netbox_oauth_api/__init__.py` (`__version__`).
 2. Rename the `[Unreleased]` section of `CHANGELOG.md` to the new version
    and date; start a fresh `[Unreleased]` section.
 3. Commit, then tag and push:
@@ -84,7 +85,7 @@ notes and the artifacts attached, and publishes to PyPI.
 
 PyPI publishing uses OIDC — no API token is stored in the repository:
 
-1. On PyPI, add a *trusted publisher* for the `netbox-keycloak-jwt-auth`
+1. On PyPI, add a *trusted publisher* for the `netbox-oauth-api`
    project: owner `andreeyka`, repository `netbox-oauth-api`, workflow
    `release.yml`, environment `pypi`.
 2. In the GitHub repository settings, create an environment named `pypi`

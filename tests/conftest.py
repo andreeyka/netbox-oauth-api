@@ -10,9 +10,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 
-from netbox_keycloak_jwt_auth import jwks as jwks_module
+from netbox_oauth_api import jwks as jwks_module
 
-ISSUER = "https://keycloak.test/realms/infra"
+ISSUER = "https://idp.test"
 KID_MAIN = "main-key"
 KID_ROTATED = "rotated-key"
 
@@ -59,7 +59,7 @@ def _clear_django_cache():
 
 
 class FakeJWKS:
-    """Mutable stand-in for the Keycloak JWKS endpoint."""
+    """Mutable stand-in for the provider's JWKS endpoint."""
 
     def __init__(self, keys):
         self.document = {"keys": keys}
@@ -95,7 +95,7 @@ def token_factory(main_key):
             "email": "jdoe@example.com",
             "given_name": "John",
             "family_name": "Doe",
-            "realm_access": {"roles": ["netbox-read"]},
+            "roles": ["netbox-read"],
         }
         payload.update(claims or {})
         payload = {k: v for k, v in payload.items() if v is not None}
@@ -118,8 +118,8 @@ def plugin_settings(settings):
     """Override individual plugin settings for a single test."""
 
     def _override(**kwargs):
-        merged = {**settings.PLUGINS_CONFIG["netbox_keycloak_jwt_auth"], **kwargs}
-        settings.PLUGINS_CONFIG = {"netbox_keycloak_jwt_auth": merged}
+        merged = {**settings.PLUGINS_CONFIG["netbox_oauth_api"], **kwargs}
+        settings.PLUGINS_CONFIG = {"netbox_oauth_api": merged}
         return merged
 
     return _override
@@ -127,15 +127,15 @@ def plugin_settings(settings):
 
 @pytest.fixture
 def auth_request():
-    """Run KeycloakJWTAuthentication against a request with the given header."""
+    """Run OIDCJWTAuthentication against a request with the given header."""
     from rest_framework.test import APIRequestFactory
 
-    from netbox_keycloak_jwt_auth.authentication import KeycloakJWTAuthentication
+    from netbox_oauth_api.authentication import OIDCJWTAuthentication
 
     def _authenticate(authorization=None):
         factory = APIRequestFactory()
         extra = {"HTTP_AUTHORIZATION": authorization} if authorization else {}
         request = factory.get("/api/", **extra)
-        return KeycloakJWTAuthentication().authenticate(request)
+        return OIDCJWTAuthentication().authenticate(request)
 
     return _authenticate
